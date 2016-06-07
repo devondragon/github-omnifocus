@@ -34,7 +34,7 @@ You can use crontab -e to edit your user crontab and create an entry like this:
 ```
 
 
-To install it in launchd, edit jofsync.plist to meet your needs and copy it to ~/Library/LaunchAgents/ghofsync.plist and run
+To install it in launchd, edit ghofsync.plist to meet your needs and copy it to ~/Library/LaunchAgents/ghofsync.plist and run
 
 ```
 launchctl load ~/Library/LaunchAgents/ghofsync.plist
