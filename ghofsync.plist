@@ -3,7 +3,7 @@
 <plist version="1.0">
   <dict>
     <key>Label</key>
-      <string>jofsync</string>
+      <string>ghofsync</string>
     <key>WorkingDirectory</key>
       <string>/Users/devon/git/github-omnifocus/bin</string>
 	  <key>ProgramArguments</key>
