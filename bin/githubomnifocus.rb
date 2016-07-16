@@ -179,7 +179,7 @@ def mark_resolved_github_issues_as_complete_in_omnifocus (omnifocus_document)
 					if task.completed.get != true
 						task.completed.set(true)
 						number    = issue.number
-						puts "Marked task completed " + number
+						puts "Marked task completed " + number.to_s
 					end
 				end
 
