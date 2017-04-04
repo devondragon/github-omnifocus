@@ -2,7 +2,7 @@
 github:
   username: 'me'
   password: 'secret'
-  oath:   ''
+  oauth:   ''
 omnifocus:
   context:  'Office'
   project:  'GitHub'
