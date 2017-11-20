@@ -58,7 +58,7 @@ def get_issues
 		client = Octokit::Client.new(:login => $opts[:username], :password => $opts[:password])
 		client.user.login
 	elsif $opts[:username] && $opts[:oauth]
-		client = Octokit::Client.new :access_token => auth[:oauth]
+		client = Octokit::Client.new :access_token => $opts[:oauth]
 		client.user.login
 	else
 		puts "No username and password or username and oauth token combo found!"
@@ -166,7 +166,7 @@ def mark_resolved_github_issues_as_complete_in_omnifocus (omnifocus_document)
 				client = Octokit::Client.new(:login => $opts[:username], :password => $opts[:password])
 				client.user.login
 			elsif $opts[:username] && $opts[:oauth]
-				client = Octokit::Client.new :access_token => auth[:oauth]
+				client = Octokit::Client.new :access_token => $opts[:oauth]
 				client.user.login
 			else
 				puts "No username and password or username and oauth token combo found!"
