@@ -3,14 +3,15 @@ GEM
   specs:
     addressable (2.5.2)
       public_suffix (>= 2.0.2, < 4.0)
-    faraday (0.13.1)
+    awesome_print (1.8.0)
+    faraday (0.15.4)
       multipart-post (>= 1.2, < 3)
     highline (1.7.8)
     json (2.1.0)
     multipart-post (2.0.0)
-    octokit (4.7.0)
+    octokit (4.13.0)
       sawyer (~> 0.8.0, >= 0.5.3)
-    public_suffix (3.0.0)
+    public_suffix (3.0.3)
     rb-scpt (1.0.3)
     sawyer (0.8.1)
       addressable (>= 2.3.5, < 2.6)
@@ -21,11 +22,12 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  awesome_print
   highline
   json
-  octokit (~> 4.0)
+  octokit (~> 4.13.0)
   rb-scpt
   trollop
 
 BUNDLED WITH
-   1.15.4
+   1.17.3

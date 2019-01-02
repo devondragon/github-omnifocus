@@ -4,4 +4,5 @@ gem 'rb-scpt'
 gem 'json'
 gem 'trollop'
 gem 'highline'
-gem "octokit", "~> 4.0"
+gem 'awesome_print'
+gem "octokit", "~> 4.13.0"

@@ -1,9 +1,4 @@
 ---
 github:
   username: 'me'
-  password: 'secret'
   oauth:   ''
-omnifocus:
-  context:  'Office'
-  project:  'GitHub'
-  flag:     true

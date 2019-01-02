@@ -8,6 +8,7 @@ require 'yaml'
 require 'net/http'
 require 'pathname'
 require 'octokit'
+require "awesome_print"
 
 Octokit.auto_paginate = true
 
@@ -19,202 +20,165 @@ def get_opts
 ---
 github:
   username: ''
-  password: ''
-omnifocus:
-  context:  'Office'
-  project:  'GitHub'
-  flag: true
+  oauth: ''
 EOS
-  end
+	end
 
 	return Trollop::options do
 		banner ""
 		banner <<-EOS
-		GitHub OmniFocus Sync Tool
+GitHub OmniFocus Sync Tool
 
 Usage:
-       ghofsync [options]
+	Create a file $HOME/.ghofsync.yaml, with the content:
+github:
+  username: ''
+  oauth: ''
 
-KNOWN ISSUES:
-      * With long names you must use an equal sign ( i.e. --hostname=test-target-1 )
-
+	Run: $ ghofsync --omnifocus_project --github_orga Github organization --github_repo Github repository
 ---
 EOS
-  version 'ghofsync 1.1.0'
-		opt :username,  'github Username',        :type => :string,   :short => 'u', :required => false,   :default => config["github"]["username"]
-		opt :password,  'github Password',        :type => :string,   :short => 'p', :required => false,   :default => config["github"]["password"]
-		opt :oauth,  	  'github oauth token',      :type => :string,   :short => 'o', :required => false,   :default => config["github"]["oauth"]
-		opt :context,   'OF Default Context',   :type => :string,   :short => 'c', :required => false,   :default => config["omnifocus"]["context"]
-		opt :project,   'OF Default Project',   :type => :string,   :short => 'r', :required => false,   :default => config["omnifocus"]["project"]
-		opt :flag,      'Flag tasks in OF',     :type => :boolean,  :short => 'f', :required => false,   :default => config["omnifocus"]["flag"]
-		opt :quiet,     'Disable output',       :type => :boolean,   :short => 'q',                      :default => true
+  		version 'ghofsync 1.1.0'
+		opt :username, 'Github Username', :type => :string, :required => false, :default => config["github"]["username"]
+		opt :oauth, 'Github oauth token', :type => :string, :required => false, :default => config["github"]["oauth"]
+
+		opt :omnifocus_project, 'OmniFocus Project', :type => :string, :short => 'p', :required => true
+		opt :github_orga, 'Github organization', :type => :string, :short => 'o', :required => true
+		opt :github_repo, 'Github repository', :type => :string, :short => 'r', :required => true
 	end
 end
 
-def get_issues
+def get_issues(ghclient, ghproject, ghrepo)
 	github_issues = Hash.new
-
-	if $opts[:username] && $opts[:password]
-		client = Octokit::Client.new(:login => $opts[:username], :password => $opts[:password])
-		client.user.login
-	elsif $opts[:username] && $opts[:oauth]
-		client = Octokit::Client.new :access_token => $opts[:oauth]
-		client.user.login
-	else
-		puts "No username and password or username and oauth token combo found!"
-	end
-
-	client.list_issues.each do |issue|
-		number    = issue.number
-		project   = issue.repository.full_name.split("/").last
-		issue_id = "#{project}-##{number}"
-
-		github_issues[issue_id] = issue
+	issues = ghclient.issues "#{ghproject}/#{ghrepo}"
+	issues.each do |issue|
+		github_issues["#{ghrepo}-##{issue.number}"] = issue
 	end
 	return github_issues
 end
 
+# Task properties
+# id (text) : The identifier of the task.
+# name (text) : The name of the task.
+# note (rich text) : The note of the task.
+# container (document, quick entry tree, project, or task, r/o) : The containing task, project or document.
+# containing project (project or missing value, r/o) : The task's project, up however many levels of parent tasks. Inbox tasks aren't considered contained by their provisionalliy assigned container, so if the task is actually an inbox task, this will be missing value.
+# parent task (task or missing value, r/o) : The task holding this task. If this is missing value, then this is a top level task -- either the root of a project or an inbox item.
+# containing document (document or quick entry tree, r/o) : The containing document or quick entry tree of the object.
+# in inbox (boolean, r/o) : Returns true if the task itself is an inbox task or if the task is contained by an inbox task.
+# primary tag (tag or missing value) : The task's first tag. Setting this will remove the current first tag on the task, if any and move or add the new tag as the first tag on the task. Setting this to missing value will remove the current first tag and leave any other remaining tags.
+# completed by children (boolean) : If true, complete when children are completed.
+# sequential (boolean) : If true, any children are sequentially dependent.
+# flagged (boolean) : True if flagged
+# next (boolean, r/o) : If the task is the next task of its containing project, next is true.
+# blocked (boolean, r/o) : True if the task has a task that must be completed prior to it being actionable.
+# creation date (date) : When the task was created. This can only be set when the object is still in the inserted state. For objects created in the document, it can be passed with the creation properties. For objects in a quick entry tree, it can be set until the quick entry panel is saved.
+# modification date (date, r/o) : When the task was last modified.
+# defer date (date or missing value) : When the task should become available for action.  syn start date
+# due date (date or missing value) : When the task must be finished.
+# completion date (date or missing value) : The task's date of completion. This can only be modified on a completed task to backdate the completion date.
+# completed (boolean, r/o) : True if the task is completed. Use the "mark complete" and "mark incomplete" commands to change a tasks's status.
+# estimated minutes (integer or missing value) : The estimated time, in whole minutes, that this task will take to finish.
+# repetition rule (repetition rule or missing value) : The repetition rule for this task, or missing value if it does not repeat.
+# next defer date (date or missing value, r/o) : The next defer date if this task repeats and it has a defer date.
+# next due date (date or missing value, r/o) : The next due date if this task repeats and it has a due date.
+# number of tasks (integer, r/o) : The number of direct children of this task.
+# number of available tasks (integer, r/o) : The number of available direct children of this task.
+# number of completed tasks (integer, r/o) : The number of completed direct children of this task.
 
-# This method adds a new Task to OmniFocus based on the new_task_properties passed in
-def add_task(omnifocus_document, new_task_properties)
-	# If there is a passed in OF project name, get the actual project object
-	if new_task_properties['project']
-		proj_name = new_task_properties["project"]
-		proj = omnifocus_document.flattened_tasks[proj_name]
-	end
+# add_issues_to_of add github issue to omnifocus
+def add_issues_to_of (ghclient, omnifocus, ofproject, ghproject, ghrepo)
+	proj = omnifocus.flattened_tasks[ofproject]
 
-	# Check to see if there's already an OF Task with that name in the referenced Project
-	# If there is, just stop.
-	name   = new_task_properties["name"]
-	#exists = proj.tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
-	# You can un-comment the line below and comment the line above if you want to search your entire OF document, instead of a specific project.
-	exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
-	return false if exists
-
-	# If there is a passed in OF context name, get the actual context object
-	if new_task_properties['context']
-		ctx_name = new_task_properties["context"]
-		ctx = omnifocus_document.flattened_contexts[ctx_name]
-	end
-
-	# Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
-	tprops = new_task_properties.inject({}) do |h, (k, v)|
-		h[:"#{k}"] = v
-		h
-	end
-
-	# Remove the project property from the new Task properties, as it won't be used like that.
-	tprops.delete(:project)
-	# Update the context property to be the actual context object not the context name
-	tprops[:context] = ctx if new_task_properties['context']
-
-	# You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
-	#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
-
-	# Make a new Task in the Project
-	proj.make(:new => :task, :with_properties => tprops)
-
-	puts "Created task " + tprops[:name]
-	return true
-end
-
-# This method is responsible for getting your assigned GitHub Issues and adding them to OmniFocus as Tasks
-def add_github_issues_to_omnifocus (omnifocus_document)
-	# Get the open Jira issues assigned to you
-	results = get_issues
+	results = get_issues ghclient, ghproject, ghrepo
 	if results.nil?
 		puts "No results from GitHub"
 		exit
 	end
 
-	# Iterate through resulting issues.
 	results.each do |issue_id, issue|
+		# do not record pull request
+		next if issue["pull_request"] && !issue["pull_request"]["diff_url"].nil?
+		url = "https://github.com/#{ghproject}/#{ghrepo}/issues/#{issue.number}"
+		exists = proj.tasks.get.find { |t| t.note.get.force_encoding("UTF-8").include? url }
+		next if exists
 
-		pr        = issue["pull_request"] && !issue["pull_request"]["diff_url"].nil?
-		number    = issue.number
-		project   = issue.repository.full_name.split("/").last
-		issue_id = "#{project}-##{number}"
-		title     = "#{issue_id}: #{pr ? "[PR] " : ""}#{issue["title"]}"
-		url       = "https://github.com/#{issue.repository.full_name}/issues/#{number}"
-		note      = "#{url}\n\n#{issue["body"]}"
+		# add task to omnifocus project
+		proj.make(:new => :task, :with_properties => { 
+			:name => "#{issue.number}: #{issue.title}", 
+			:note => "#{url}\n\n#{issue["body"]}",
+			:primary_tag => omnifocus.flattened_tags['ghissue']
+		})
 
-		task_name = title
-		# Create the task notes with the GitHub Issue URL and issue body
-		task_notes = note
-
-		# Build properties for the Task
-		@props = {}
-		@props['name'] = task_name
-		@props['project'] = $opts[:project]
-		@props['context'] = $opts[:context]
-		@props['note'] = task_notes
-		@props['flagged'] = $opts[:flag]
-		add_task(omnifocus_document, @props)
+		puts "Created task #{issue.number}: #{issue.title}"
 	end
 end
 
-def mark_resolved_github_issues_as_complete_in_omnifocus (omnifocus_document)
-	# get tasks from the project
-	ctx = omnifocus_document.flattened_contexts[$opts[:context]]
-	ctx.tasks.get.find.each do |task|
-		if !task.completed.get && task.note.get.match('github')
+def sync_issue_in_of (ghclient, omnifocus)
+	create_tag_if_not_exists(omnifocus, "ghissue")
+	tag = omnifocus.flattened_tags['ghissue']
+	tag.tasks.get.find.each do |task|
+		next if !task.note.get.match('github')
+		
+		repoFullname, number = task.note.get.match(/https:\/\/github.com\/(.*)?\/issues\/(.*)/i).captures
+		issue = ghclient.issue(repoFullname, number)
+		next if issue == nil
 
-			note = task.note.get
-			repo, number = note.match(/https:\/\/github.com\/(.*)?\/issues\/(.*)/i).captures
+		task.name.set "#{issue.number}: #{issue["title"]}"
+		if issue.state == 'closed' && task.completed.get != true
+			task.mark_complete()
+			puts "Marked task completed #{issue.number}"
+		elsif issue.state != 'closed' && task.completed.get
+			task.mark_incomplete()
+			puts "Marked task incompleted #{issue.number}"
+		end
 
-			if $opts[:username] && $opts[:password]
-				client = Octokit::Client.new(:login => $opts[:username], :password => $opts[:password])
-				client.user.login
-			elsif $opts[:username] && $opts[:oauth]
-				client = Octokit::Client.new :access_token => $opts[:oauth]
-				client.user.login
-			else
-				puts "No username and password or username and oauth token combo found!"
+		issue.labels.each do |label|
+			if !task.tags.get.find { |t| t.name.get == label.name }
+				puts "add tag " + label.name + " on omnifocus task #{issue.number}"
+				create_tag_if_not_exists(omnifocus, label.name)
+				tag = omnifocus.flattened_tags[label.name]
+				omnifocus.add(tag, :to => task.tags)
 			end
+		end
 
-			issue = client.issue(repo, number)
-			if issue != nil
-				if issue.state == 'closed'
-					# if resolved, mark it as complete in OmniFocus
-					if task.completed.get != true
-						task.mark_complete()
-						number    = issue.number
-						puts "Marked task completed " + number.to_s
-					end
-				end
-
-				# Check to see if the GitHub issue has been unassigned or assigned to someone else, if so delete it.
-				# It will be re-created if it is assigned back to you.
-				if ! issue.assignee
-					omnifocus_document.delete task
-				else
-					assignee = issue.assignee.login.downcase
-					if assignee != $opts[:username].downcase
-						omnifocus_document.delete task
-					end
-				end
-			end
+		if task.flagged.get && issue.assignee.login.downcase != $opts[:username].downcase
+			puts "task flagged unassigned me #{issue.number}"
+			task.flagged.set false
+		elsif !task.flagged.get && issue.assignee && issue.assignee.login.downcase == $opts[:username].downcase
+			puts "task flagged to me #{issue.number}"
+			task.flagged.set true
 		end
 	end
 end
 
-def app_is_running(app_name)
-	`ps aux` =~ /#{app_name}/ ? true : false
+def create_tag_if_not_exists(omnifocus, tagname)
+	tag = omnifocus.flattened_tags[tagname]
+	if !omnifocus.exists(tag)
+		puts "tag #{tagname} does not exist"
+		omnifocus.make(:new => :tag, :with_properties => { :name => tagname })
+		puts "tag #{tagname} created"
+	end
 end
-
-def get_omnifocus_document
-	return Appscript.app.by_name("OmniFocus").default_document
-end
-
-
 
 def main ()
-	if app_is_running("OmniFocus")
-		$opts = get_opts
-		omnifocus_document = get_omnifocus_document
-		add_github_issues_to_omnifocus(omnifocus_document)
-		mark_resolved_github_issues_as_complete_in_omnifocus(omnifocus_document)
+	if !`ps aux` =~ /OmniFocus/
+		puts "OmniFocus is not running"
+		exit
 	end
+
+	$opts = get_opts
+	if $opts[:username] && $opts[:oauth]
+		ghclient = Octokit::Client.new :access_token => $opts[:oauth]
+		ghclient.user.login
+	else
+		puts "No username and oauth token combo found! Try --help for help."
+		exit
+	end
+
+	omnifocus = Appscript.app.by_name("OmniFocus").default_document
+	add_issues_to_of(ghclient, omnifocus, $opts[:omnifocus_project], $opts[:github_orga], $opts[:github_repo])
+	sync_issue_in_of(ghclient, omnifocus)
 end
 
 main
