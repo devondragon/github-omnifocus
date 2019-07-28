@@ -21,7 +21,7 @@ github:
   username: ''
   password: ''
 omnifocus:
-  context:  'Office'
+  tag:  'Office'
   project:  'GitHub'
   flag: true
 EOS
@@ -44,7 +44,7 @@ EOS
 		opt :username,  'github Username',        :type => :string,   :short => 'u', :required => false,   :default => config["github"]["username"]
 		opt :password,  'github Password',        :type => :string,   :short => 'p', :required => false,   :default => config["github"]["password"]
 		opt :oauth,  	  'github oauth token',      :type => :string,   :short => 'o', :required => false,   :default => config["github"]["oauth"]
-		opt :context,   'OF Default Context',   :type => :string,   :short => 'c', :required => false,   :default => config["omnifocus"]["context"]
+		opt :tag,       'OF Default Tag',       :type => :string,   :short => 'c', :required => false,   :default => config["omnifocus"]["tag"]
 		opt :project,   'OF Default Project',   :type => :string,   :short => 'r', :required => false,   :default => config["omnifocus"]["project"]
 		opt :flag,      'Flag tasks in OF',     :type => :boolean,  :short => 'f', :required => false,   :default => config["omnifocus"]["flag"]
 		opt :quiet,     'Disable output',       :type => :boolean,   :short => 'q',                      :default => true
@@ -92,9 +92,9 @@ def add_task(omnifocus_document, new_task_properties)
 	return false if exists
 
 	# If there is a passed in OF context name, get the actual context object
-	if new_task_properties['context']
-		ctx_name = new_task_properties["context"]
-		ctx = omnifocus_document.flattened_contexts[ctx_name]
+	if new_task_properties['tag']
+		tag_name = new_task_properties["tag"]
+		tag = omnifocus_document.flattened_tags[tag_name]
 	end
 
 	# Do some task property filtering.  I don't know what this is for, but found it in several other scripts that didn't work...
@@ -105,8 +105,9 @@ def add_task(omnifocus_document, new_task_properties)
 
 	# Remove the project property from the new Task properties, as it won't be used like that.
 	tprops.delete(:project)
-	# Update the context property to be the actual context object not the context name
-	tprops[:context] = ctx if new_task_properties['context']
+	# Update the primary tag property to be the actual tag object not the tag name
+  tprops.delete(:tag)
+	tprops[:primary_tag] = tag if new_task_properties['tag']
 
 	# You can uncomment this line and comment the one below if you want the tasks to end up in your Inbox instead of a specific Project
 	#  new_task = omnifocus_document.make(:new => :inbox_task, :with_properties => tprops)
@@ -146,7 +147,7 @@ def add_github_issues_to_omnifocus (omnifocus_document)
 		@props = {}
 		@props['name'] = task_name
 		@props['project'] = $opts[:project]
-		@props['context'] = $opts[:context]
+		@props['tag'] = $opts[:tag]
 		@props['note'] = task_notes
 		@props['flagged'] = $opts[:flag]
 		add_task(omnifocus_document, @props)
@@ -155,7 +156,7 @@ end
 
 def mark_resolved_github_issues_as_complete_in_omnifocus (omnifocus_document)
 	# get tasks from the project
-	ctx = omnifocus_document.flattened_contexts[$opts[:context]]
+	ctx = omnifocus_document.flattened_tags[$opts[:tag]]
 	ctx.tasks.get.find.each do |task|
 		if !task.completed.get && task.note.get.match('github')
 
