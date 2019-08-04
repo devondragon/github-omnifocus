@@ -27,7 +27,7 @@ omnifocus:
 EOS
   end
 
-	return Trollop::options do
+	return Optimist::options do
 		banner ""
 		banner <<-EOS
 		GitHub OmniFocus Sync Tool
@@ -91,7 +91,7 @@ def add_task(omnifocus_document, new_task_properties)
 	exists = omnifocus_document.flattened_tasks.get.find { |t| t.name.get.force_encoding("UTF-8") == name }
 	return false if exists
 
-	# If there is a passed in OF context name, get the actual context object
+	# If there is a passed in OF tag name, get the actual tag object
 	if new_task_properties['tag']
 		tag_name = new_task_properties["tag"]
 		tag = omnifocus_document.flattened_tags[tag_name]
