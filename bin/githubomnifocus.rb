@@ -210,7 +210,9 @@ end
 
 
 def main ()
+  puts "Running...."
 	if app_is_running("OmniFocus")
+    puts "OF is running"
 		$opts = get_opts
 		omnifocus_document = get_omnifocus_document
 		add_github_issues_to_omnifocus(omnifocus_document)
@@ -219,3 +221,4 @@ def main ()
 end
 
 main
+
