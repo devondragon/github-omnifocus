@@ -19,7 +19,7 @@ gem install bundler
 bundle install
 ```
 
-This also support [rbenv](http://rbenv.org/), if you happen to be using it.
+This also supports [rbenv](http://rbenv.org/), if you happen to be using it.
 
 You'll need to copy ghofsync.yaml.sample from the git checkout to ~/.ghofsync.yaml, and then edit is as appropriate.
 
